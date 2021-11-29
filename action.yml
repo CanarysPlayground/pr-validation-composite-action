@@ -1,0 +1,62 @@
+name: 'PRTest action'
+description: 'To validate Correct PRs'
+inputs:
+  Base:
+    description: 'Base Branch where changes will be merged'
+    required: true
+  Head: 
+    description: 'Branch from where the changes will be merged'
+    required: true
+outputs:
+  comparisonoutput:
+    description: 'PR to be updated based on conditions'
+runs:
+  using: "composite"
+  steps:
+   - name: Comparing Branches
+     id: compare
+     if: ${{ github.head_ref == inputs.Head && github.base_ref == inputs.Base }}
+     run: echo ::set-output name=status::success
+     shell: bash
+        
+   - name: Get Pull Request ID
+     run: |
+      export PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')
+      echo "pr_num=$PR_NUMBER" >> $GITHUB_ENV
+     shell: bash
+         
+
+   - name: Add Comment to Pull Request if Success
+     if: steps.compare.outputs.status == 'success'
+     uses: actions/github-script@v5
+     with:
+       script: |
+          await github.rest.issues.createComment({
+          owner: context.repo.owner, 
+          repo: context.repo.repo, 
+          issue_number: ${{ env.pr_num }},
+          body: 'Its Success'
+          });
+           
+   - name: Add Comment to Pull Request if Failure
+     if: steps.compare.outputs.status != 'success'
+     uses: actions/github-script@v5
+     with:
+       script: |
+         await github.rest.issues.createComment({
+         owner: context.repo.owner, 
+         repo: context.repo.repo, 
+         issue_number: ${{ env.pr_num }},
+         body: 'PR Validation Failed, Please refer #34 to follow the correct rules for PR Creation'
+         });
+           
+   - name: Close PR 
+     if: steps.compare.outputs.status != 'success'
+     uses: actions/github-script@v5
+     with:
+        script: |
+           await github.rest.issues.update({
+           owner: context.repo.owner,
+           repo: context.repo.repo ,
+           issue_number: ${{ env.pr_num }},
+           state: 'closed' });  
